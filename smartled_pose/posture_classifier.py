@@ -295,7 +295,64 @@ def apply_side_view_overrides(decision: StateClassifierDecision, feature_row: di
     head_deviation = feature_row.get("head_distance_ratio_deviation", 0.0)
     forward_ratio = feature_row.get("abs_nose_shoulder_dx_ratio", 0.0)
     shoulder_ratio = feature_row.get("shoulder_ratio", 0.0)
+    bbox_ratio = feature_row.get("bbox_ratio", 0.0)
     kp_ratio = feature_row.get("kp_valid_ratio", 0.0)
+    nose_x = feature_row.get("nose_bbox_x_ratio", 1.0)
+    nose_y = feature_row.get("nose_bbox_y_ratio", 1.0)
+    normal_to_abnormal = {
+        "computer_normal": "computer_abnormal",
+        "reading_normal": "reading_abnormal",
+    }
+
+    # Current side-view feedback: computer use is best separated from reading
+    # by nose position inside the person box. The user-facing classes should
+    # remain mode-aware even when the KNN neighborhood is biased toward reading.
+    if (
+        decision.label in {"reading_normal", "reading_abnormal"}
+        and kp_ratio >= 0.34
+        and bbox_ratio >= 1.03
+        and shoulder_ratio >= 1.55
+        and nose_x <= 0.17
+        and nose_y <= 0.49
+    ):
+        return StateClassifierDecision(
+            label="computer_abnormal",
+            text=STATE_TEXT["computer_abnormal"],
+            confidence=max(decision.confidence, 0.72),
+            model_name=f"{decision.model_name}+computer_abnormal_feedback",
+        )
+
+    if (
+        decision.label in {"reading_normal", "reading_abnormal"}
+        and kp_ratio >= 0.34
+        and 0.80 <= bbox_ratio <= 1.10
+        and head_deviation >= 0.58
+        and forward_ratio <= 0.65
+        and nose_x >= 0.18
+        and nose_y <= 0.35
+    ):
+        return StateClassifierDecision(
+            label="computer_normal",
+            text=STATE_TEXT["computer_normal"],
+            confidence=max(decision.confidence, 0.70),
+            model_name=f"{decision.model_name}+computer_normal_feedback",
+        )
+
+    if (
+        decision.label == "reading_abnormal"
+        and kp_ratio >= 0.34
+        and bbox_ratio <= 0.88
+        and 0.35 <= nose_y <= 0.49
+        and head_deviation >= 0.50
+        and shoulder_ratio <= 1.57
+        and nose_x >= 0.24
+    ):
+        return StateClassifierDecision(
+            label="reading_normal",
+            text=STATE_TEXT["reading_normal"],
+            confidence=max(decision.confidence, 0.70),
+            model_name=f"{decision.model_name}+reading_normal_feedback",
+        )
 
     # Feedback showed near-computer posture often appears as computer_normal
     # while head/shoulder and nose/shoulder forward ratios are already high.
@@ -308,11 +365,72 @@ def apply_side_view_overrides(decision: StateClassifierDecision, feature_row: di
         and 1.24 <= head_deviation <= 1.70
         and 1.05 <= forward_ratio <= 1.35
     ):
+        abnormal_label = normal_to_abnormal[decision.label]
+        return StateClassifierDecision(
+            label=abnormal_label,
+            text=STATE_TEXT[abnormal_label],
+            confidence=max(decision.confidence, 0.67),
+            model_name=f"{decision.model_name}+side_override",
+        )
+
+    if (
+        decision.label in normal_to_abnormal
+        and kp_ratio >= 0.35
+        and shoulder_ratio >= 1.40
+        and bbox_ratio >= 0.98
+        and forward_ratio >= 0.75
+    ):
+        abnormal_label = normal_to_abnormal[decision.label]
+        return StateClassifierDecision(
+            label=abnormal_label,
+            text=STATE_TEXT[abnormal_label],
+            confidence=max(decision.confidence, 0.67),
+            model_name=f"{decision.model_name}+scale_override",
+        )
+
+    if (
+        decision.label == "reading_normal"
+        and kp_ratio >= 0.34
+        and 0.52 <= forward_ratio <= 0.75
+        and head_deviation <= 0.85
+        and bbox_ratio >= 0.70
+        and nose_y <= 0.34
+    ):
+        return StateClassifierDecision(
+            label="computer_normal",
+            text=STATE_TEXT["computer_normal"],
+            confidence=max(decision.confidence, 0.67),
+            model_name=f"{decision.model_name}+computer_pose_override",
+        )
+
+    if (
+        decision.label == "reading_normal"
+        and kp_ratio >= 0.40
+        and forward_ratio >= 1.0
+        and 1.12 <= shoulder_ratio <= 1.34
+        and bbox_ratio >= 1.0
+    ):
         return StateClassifierDecision(
             label="computer_abnormal",
             text=STATE_TEXT["computer_abnormal"],
             confidence=max(decision.confidence, 0.67),
-            model_name=f"{decision.model_name}+side_override",
+            model_name=f"{decision.model_name}+computer_forward_override",
+        )
+
+    if (
+        decision.label in {"reading_normal", "reading_abnormal"}
+        and kp_ratio >= 0.45
+        and forward_ratio >= 0.78
+        and shoulder_ratio >= 1.32
+        and bbox_ratio >= 1.05
+        and nose_x <= 0.20
+        and nose_y <= 0.42
+    ):
+        return StateClassifierDecision(
+            label="computer_abnormal",
+            text=STATE_TEXT["computer_abnormal"],
+            confidence=max(decision.confidence, 0.68),
+            model_name=f"{decision.model_name}+computer_screen_lean_override",
         )
     return decision
 

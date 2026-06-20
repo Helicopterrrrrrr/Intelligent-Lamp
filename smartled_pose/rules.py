@@ -36,14 +36,14 @@ class RuleEngine:
         rules = self.config["rules"]
         selection = self.config["selection"]
         use_roi = selection.get("use_roi", True)
-        valid = bool(
-            detection_found
-            and features
-            and features.pose_conf >= selection["min_confidence"]
-            and features.kp_valid_ratio >= rules["kp_valid_ratio_min"]
+        in_roi = bool(
+            features
             and (not use_roi or features.roi_overlap >= selection["min_roi_overlap"])
             and (not use_roi or features.center_in_roi)
-            and (not use_roi or features.shoulders_in_roi)
+        )
+        valid = bool(
+            detection_found
+            and (features is None or in_roi)
         )
         if valid:
             self.state.missing_started_at = None

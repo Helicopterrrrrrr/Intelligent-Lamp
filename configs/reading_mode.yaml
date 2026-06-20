@@ -19,16 +19,16 @@ roi:
 selection:
   use_roi: false
   hold_last_seconds: 1.0
-  min_confidence: 0.5
+  min_confidence: 0.45
   min_roi_overlap: 0.2
   kp_confidence: 0.3
 
 rules:
-  kp_valid_ratio_min: 0.32
+  kp_valid_ratio_min: 0.4
   seated_candidate_seconds: 1.5
   absent_seconds: 2.0
   warning_hold_seconds: 1.0
-  cooldown_seconds: 5.0
+  cooldown_seconds: 3.0
   label_window_seconds: 0.5
   near_ratio: 1.15
   too_close_ratio: 1.25
@@ -37,10 +37,10 @@ rules:
   lean_angle_deg: 12.0
   head_down_drop_shoulder_ratio: 0.28
   head_down_angle_deg: 18.0
-  head_distance_ratio_threshold: 1.3
+  head_distance_ratio_threshold: 1.30
   torso_angle_deviation_deg: 15.0
-  head_tilt_deviation_deg: 15.0
-  neck_angle_threshold_deg: 30.0
+  head_tilt_deviation_deg: 35.0
+  neck_angle_threshold_deg: 35.0
 
 reference:
   shoulder_width_px: null

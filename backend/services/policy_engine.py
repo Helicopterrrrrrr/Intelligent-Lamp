@@ -1,7 +1,11 @@
 import time
 
 from backend.services import lamp_service
-from backend.services.db import fetch_one
+from backend.services.db import fetch_all, fetch_one
+
+
+COMPUTER_POSE_STATES = frozenset({"computer_normal", "computer_abnormal"})
+READING_POSE_STATES = frozenset({"reading_normal", "reading_abnormal"})
 
 
 def evaluate(derived_state, telemetry=None, policy=None):
@@ -45,6 +49,10 @@ def evaluate(derived_state, telemetry=None, policy=None):
             "reason": light_action["reason"],
         }
 
+    activity_mode = _stable_activity_mode(derived_state, now, config)
+    if activity_mode:
+        light_action = _adjust_lighting_for_activity(light_action, activity_mode, config)
+
     return {
         "type": "set_light",
         "power": True,
@@ -87,6 +95,80 @@ def maybe_execute(derived_state, telemetry=None):
         mode="auto",
     )
     return {"executed": result.get("status") == "success", "action": action, **result}
+
+
+def _stable_activity_mode(derived_state, now, config):
+    if not config.get("activity_adjustment_enabled", True):
+        return None
+
+    current_mode = _pose_activity_mode(derived_state.get("pose_state"))
+    if current_mode is None:
+        return None
+
+    device_id = derived_state.get("device_id")
+    if not device_id:
+        return current_mode
+
+    stable_seconds = int(config.get("activity_stable_seconds", 4))
+    min_samples = int(config.get("activity_stable_min_samples", 3))
+    min_ratio = float(config.get("activity_stable_ratio", 0.7))
+    start_at = now - max(1, stable_seconds) + 1
+
+    rows = fetch_all(
+        """
+        SELECT pose_state FROM derived_states
+        WHERE device_id = ?
+          AND timestamp >= ?
+          AND timestamp <= ?
+          AND presence_state = 'present'
+          AND pose_state IN (
+            'computer_normal',
+            'computer_abnormal',
+            'reading_normal',
+            'reading_abnormal'
+          )
+        ORDER BY timestamp DESC
+        """,
+        (device_id, start_at, now),
+    )
+    samples = [current_mode]
+    samples.extend(
+        mode for mode in (_pose_activity_mode(row.get("pose_state")) for row in rows) if mode is not None
+    )
+
+    if len(samples) < min_samples:
+        return None
+
+    candidate_count = sum(1 for mode in samples if mode == current_mode)
+    if candidate_count / len(samples) < min_ratio:
+        return None
+    return current_mode
+
+
+def _pose_activity_mode(pose_state):
+    if pose_state in COMPUTER_POSE_STATES:
+        return "computer"
+    if pose_state in READING_POSE_STATES:
+        return "reading"
+    return None
+
+
+def _adjust_lighting_for_activity(light_action, activity_mode, config):
+    adjusted = dict(light_action)
+    brightness = int(adjusted["brightness"])
+
+    if activity_mode == "computer":
+        brightness += int(config.get("computer_brightness_delta", -15))
+        brightness = min(brightness, int(config.get("computer_max_brightness", 45)))
+    elif activity_mode == "reading":
+        brightness += int(config.get("reading_brightness_delta", 15))
+        brightness = max(brightness, int(config.get("reading_min_brightness", 55)))
+
+    min_brightness = int(config.get("min_auto_brightness", config.get("dim_brightness", 20)))
+    max_brightness = int(config.get("max_auto_brightness", config.get("too_dark_brightness", 80)))
+    adjusted["brightness"] = int(max(min_brightness, min(max_brightness, brightness)))
+    adjusted["reason"] = f"{adjusted['reason']}_{activity_mode}"
+    return adjusted
 
 
 def _same_as_current(action, state):

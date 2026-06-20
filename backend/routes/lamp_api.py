@@ -125,6 +125,7 @@ def test_policy():
         "presence_state": payload.get("presence_state"),
         "distance_level": payload.get("distance_level"),
         "env_labels": payload.get("env_label") or payload.get("env_labels") or [],
+        "pose_state": payload.get("pose_state"),
         "study_state": payload.get("study_state"),
     }
     return ok({"decision": policy_engine.evaluate(derived, payload)})

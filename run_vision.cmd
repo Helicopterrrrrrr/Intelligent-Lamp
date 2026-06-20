@@ -2,7 +2,7 @@
 setlocal
 
 set "ROOT=%~dp0"
-set "PYTHON=D:\miniconda3\envs\studypilot\python.exe"
+set "PYTHON=%USERPROFILE%\anaconda3\envs\smartled\python.exe"
 set "BACKEND_URL=http://127.0.0.1:5000"
 set "VISION_TOKEN=change-me"
 set "DEVICE_TOKEN=change-me"
